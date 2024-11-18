@@ -27,6 +27,15 @@
             border-radius: 8px;
             font-size: 16px;
         }
+        .scan-another {
+            background: #34C759;
+        }
+        .finish-button {
+            background: #FF9500;
+            display: none;
+            width: 100%;
+            margin-top: 10px;
+        }
         #result {
             margin-top: 20px;
             padding: 15px;
@@ -51,6 +60,17 @@
             background: #ffe6e6;
             border-radius: 8px;
         }
+        #scannedList {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            display: none;
+        }
+        .scan-controls {
+            display: none;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -64,11 +84,20 @@
     <input type="file" id="fileInput" accept="image/*" capture="environment" onChange="handleImageSelect(event)">
     <img id="preview" alt="Preview">
     <div id="result"></div>
+    <div id="scannedList"></div>
+    
+    <div class="scan-controls">
+        <button class="scan-another" onclick="scanAnother()">Scan Another?</button>
+        <button class="scan-another" onclick="finishScanning()">No, I'm Done</button>
+    </div>
+    
+    <button id="openSZButton" class="finish-button" onclick="openInSZWholesale()">Open in SZ Wholesale</button>
 
     <script>
         // Initialize the Dynamsoft Barcode Reader
         Dynamsoft.DBR.BarcodeReader.license = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
         let reader = null;
+        let scannedBarcodes = [];
         
         async function initBarcodeReader() {
             try {
@@ -82,6 +111,30 @@
         function takePicture() {
             document.getElementById('fileInput').setAttribute('capture', 'environment');
             document.getElementById('fileInput').click();
+        }
+
+        function updateScannedList() {
+            const listDiv = document.getElementById('scannedList');
+            if (scannedBarcodes.length > 0) {
+                listDiv.style.display = 'block';
+                listDiv.innerHTML = '<h3>Scanned Items:</h3>' + 
+                    scannedBarcodes.map((code, index) => 
+                        `${index + 1}. ${code}`
+                    ).join('<br>');
+            }
+        }
+
+        function scanAnother() {
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('preview').style.display = 'none';
+            document.querySelector('.scan-controls').style.display = 'none';
+            document.querySelector('.button-container').style.display = 'flex';
+        }
+
+        function finishScanning() {
+            document.querySelector('.scan-controls').style.display = 'none';
+            document.querySelector('.button-container').style.display = 'none';
+            document.getElementById('openSZButton').style.display = 'block';
         }
 
         async function handleImageSelect(event) {
@@ -99,8 +152,18 @@
                 
                 const resultDiv = document.getElementById('result');
                 if (results.length > 0) {
+                    const barcode = results[0].barcodeText;
+                    scannedBarcodes.push(barcode);
+                    
                     resultDiv.style.display = 'block';
-                    resultDiv.textContent = 'Detected Barcode: ' + results[0].barcodeText;
+                    resultDiv.textContent = 'Detected Barcode: ' + barcode;
+                    
+                    // Update scanned list
+                    updateScannedList();
+                    
+                    // Show scan controls
+                    document.querySelector('.scan-controls').style.display = 'block';
+                    document.querySelector('.button-container').style.display = 'none';
                     
                     // Vibrate if supported
                     if (navigator.vibrate) {
@@ -116,6 +179,39 @@
                 resultDiv.style.display = 'block';
                 resultDiv.textContent = 'Error scanning barcode: ' + (ex.message || ex);
             }
+        }
+
+        async function openInSZWholesale() {
+            // Function to simulate entering a SKU and pressing enter
+            function simulateSearch(sku) {
+                return new Promise(resolve => {
+                    // Create hidden input, set value, simulate enter
+                    const input = document.createElement('input');
+                    input.value = sku;
+                    document.body.appendChild(input);
+                    input.select();
+                    const event = new KeyboardEvent('keypress', {
+                        key: 'Enter',
+                        code: 'Enter',
+                        keyCode: 13,
+                        bubbles: true
+                    });
+                    input.dispatchEvent(event);
+                    document.body.removeChild(input);
+                    setTimeout(resolve, 1000); // Wait for page to load
+                });
+            }
+
+            // Open SZ Wholesale in a new window
+            const win = window.open('https://www.szwholesale.net/scan-order', '_blank');
+            
+            // Wait for page load
+            win.addEventListener('load', async () => {
+                // Enter each SKU
+                for (const sku of scannedBarcodes) {
+                    await simulateSearch(sku);
+                }
+            });
         }
     </script>
 </body>
