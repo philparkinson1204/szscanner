@@ -3,18 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iOS Barcode Scanner</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <title>Barcode Image Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode@9.6.30/dist/dbr.js"></script>
     <style>
         body {
             margin: 0;
             padding: 20px;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        #reader {
-            width: 100%;
             max-width: 600px;
             margin: 0 auto;
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        button {
+            flex: 1;
+            padding: 15px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
         }
         #result {
             margin-top: 20px;
@@ -23,37 +34,89 @@
             border-radius: 8px;
             display: none;
         }
-        button {
+        #preview {
             width: 100%;
-            padding: 15px;
-            background: #007AFF;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
+            max-width: 100%;
+            display: none;
             margin-top: 20px;
+            border-radius: 8px;
+        }
+        #fileInput {
+            display: none;
         }
         .error {
             color: red;
             margin-top: 10px;
+            padding: 10px;
+            background: #ffe6e6;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
-    <h1>iOS Barcode Scanner</h1>
-    <div id="reader"></div>
+    <h1>Barcode Image Scanner</h1>
+    
+    <div class="button-container">
+        <button onclick="document.getElementById('fileInput').click()">Upload Image</button>
+        <button onclick="takePicture()">Take Picture</button>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*" capture="environment" onChange="handleImageSelect(event)">
+    <img id="preview" alt="Preview">
     <div id="result"></div>
-    <button onclick="startScanning()" id="startButton">Start Scanning</button>
 
     <script>
-        let html5QrcodeScanner = null;
-        let isScanning = false;
+        // Initialize the Dynamsoft Barcode Reader
+        Dynamsoft.DBR.BarcodeReader.license = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
+        let reader = null;
+        
+        async function initBarcodeReader() {
+            try {
+                reader = await Dynamsoft.DBR.BarcodeReader.createInstance();
+            } catch (ex) {
+                alert('Failed to initialize barcode reader: ' + (ex.message || ex));
+            }
+        }
+        initBarcodeReader();
 
-        function onScanSuccess(decodedText, decodedResult) {
-            const resultDiv = document.getElementById('result');
-            resultDiv.style.display = 'block';
-            resultDiv.textContent = "Scanned Code: " + decodedText;
-            
-            // Vibrate if supported
-            if (navigator.vibrate) {
-                navigator
+        function takePicture() {
+            document.getElementById('fileInput').setAttribute('capture', 'environment');
+            document.getElementById('fileInput').click();
+        }
+
+        async function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Show preview
+            const preview = document.getElementById('preview');
+            preview.style.display = 'block';
+            preview.src = URL.createObjectURL(file);
+
+            try {
+                // Scan the image
+                const results = await reader.decode(file);
+                
+                const resultDiv = document.getElementById('result');
+                if (results.length > 0) {
+                    resultDiv.style.display = 'block';
+                    resultDiv.textContent = 'Detected Barcode: ' + results[0].barcodeText;
+                    
+                    // Vibrate if supported
+                    if (navigator.vibrate) {
+                        navigator.vibrate(200);
+                    }
+                } else {
+                    resultDiv.style.display = 'block';
+                    resultDiv.textContent = 'No barcode found in image';
+                }
+            } catch (ex) {
+                console.error(ex);
+                const resultDiv = document.getElementById('result');
+                resultDiv.style.display = 'block';
+                resultDiv.textContent = 'Error scanning barcode: ' + (ex.message || ex);
+            }
+        }
+    </script>
+</body>
+</html>
