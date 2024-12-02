@@ -3,177 +3,298 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Scanner</title>
+    <title>Barcode Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode@9.6.30/dist/dbr.js"></script>
     <style>
-        /* Keeping the same styles for brevity */
         body {
             margin: 0;
             padding: 20px;
-            font-family: -apple-system, system-ui, sans-serif;
-            background: #f5f5f7;
-            max-width: 800px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 600px;
             margin: 0 auto;
-        }
-        .status-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 10px;
-            background: #FF3B30;
-            color: white;
-            text-align: center;
-            z-index: 1000;
-            display: none;
+            background: #f5f5f7;
         }
         .button-container {
             display: flex;
-            gap: 15px;
+            gap: 10px;
             margin: 20px 0;
         }
         button {
             flex: 1;
-            padding: 16px;
+            padding: 15px;
             background: #007AFF;
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 8px;
             font-size: 16px;
+        }
+        .scan-another {
+            background: #34C759;
+        }
+        .finish-button {
+            background: #FF9500;
+            display: none;
+            width: 100%;
+            margin-top: 10px;
+        }
+        #result {
+            margin-top: 20px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #e6ffe6;
+            border-radius: 8px;
+            display: none;
+        }
+        #preview {
+            width: 100%;
+            max-width: 100%;
+            display: none;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+        #fileInput, #uploadInput {
+            display: none;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+            padding: 10px;
+            background: #ffe6e6;
+            border-radius: 8px;
+        }
+        #scannedList {
+        .scan-history {
+            margin-top: 20px;
         }
         .scan-item {
             background: white;
-            padding: 20px;
-            margin: 10px 0;
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 15px;
+            background: #f0f0f0;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .scan-image {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            display: none;
+            background: #f0f0f0;
+        }
+        .scan-controls {
+            display: none;
+            margin-top: 20px;
+        .scan-details {
+            flex: 1;
+        }
+        .sku {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 14px;
+        }
+        .total-count {
+            background: #007AFF;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        .logo-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .logo {
+            max-width: 200px;
+            height: auto;
         }
     </style>
 </head>
 <body>
-    <div id="statusBanner" class="status-banner"></div>
-    <h1>Product Scanner</h1>
+    <div class="logo-container">
+        <img src="SZLogo.png" alt="SZ Logo" class="logo">
+    </div>
     
+    <h1>Barcode Scanner</h1>
+
     <div class="button-container">
-        <button onclick="initializeScanner('upload')" id="uploadBtn">Upload Image</button>
-        <button onclick="initializeScanner('camera')" id="cameraBtn">Take Picture</button>
+        <button onclick="document.getElementById('uploadInput').click()">Upload Image</button>
+        <button onclick="document.getElementById('fileInput').click()">Take Picture</button>
     </div>
 
-    <div id="scanHistory"></div>
+    <input type="file" id="fileInput" accept="image/*" capture="environment" onChange="handleImageSelect(event)">
+    <input type="file" id="uploadInput" accept="image/*" multiple onChange="handleImageSelect(event)">
+    <img id="preview" alt="Preview">
+    <div id="result"></div>
+    <div id="scannedList"></div>
+
+    <div class="scan-controls">
+        <button class="scan-another" onclick="scanAnother()">Scan Another?</button>
+        <button class="scan-another" onclick="finishScanning()">No, I'm Done</button>
+    </div>
+    
+    <button id="openSZButton" class="finish-button" onclick="openInSZWholesale()">Open in SZ Wholesale</button>
+    <div class="scan-history" id="scanHistory"></div>
 
     <script>
+        // Initialize with new license key from the email
+        Dynamsoft.DBR.BarcodeReader.license = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
         let reader = null;
-        let scans = [];
-        let isInitializing = false;
-        const LICENSE_KEY = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
-
-        function showStatus(message, isError = false) {
-            const banner = document.getElementById('statusBanner');
-            banner.style.background = isError ? '#FF3B30' : '#34C759';
-            banner.textContent = message;
-            banner.style.display = 'block';
-            setTimeout(() => banner.style.display = 'none', 3000);
-        }
+        let scannedBarcodes = [];
+        let scannedItems = [];
 
         async function initBarcodeReader() {
-            if (isInitializing) return false;
-            if (reader) return true;
-
-            isInitializing = true;
             try {
-                Dynamsoft.DBR.BarcodeReader.license = LICENSE_KEY;
                 reader = await Dynamsoft.DBR.BarcodeReader.createInstance();
-                return true;
-            } catch (error) {
-                console.error('Scanner initialization error:', error);
-                showStatus('Scanner error: ' + error.message, true);
-                return false;
-            } finally {
-                isInitializing = false;
+            } catch (ex) {
+                alert('Failed to initialize barcode reader: ' + (ex.message || ex));
             }
         }
+        initBarcodeReader();
 
-        function disableButtons(disable) {
-            document.getElementById('uploadBtn').disabled = disable;
-            document.getElementById('cameraBtn').disabled = disable;
-        }
-
-        async function initializeScanner(mode) {
-            disableButtons(true);
-            
-            if (!await initBarcodeReader()) {
-                disableButtons(false);
-                return;
-            }
-
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            if (mode === 'camera') input.capture = 'environment';
-            input.multiple = true;
-            input.onchange = handleFiles;
-            input.click();
-            
-            disableButtons(false);
-        }
-
-        async function handleFiles(event) {
+        async function handleImageSelect(event) {
             const files = event.target.files;
             if (!files.length) return;
 
-            disableButtons(true);
-            showStatus('Processing...');
-
-            try {
-                for (const file of files) {
-                    try {
-                        const results = await reader.decode(file);
-                        
-                        if (results.length > 0) {
-                            const barcode = results[0].barcodeText;
-                            
-                            if (!scans.find(scan => scan.barcode === barcode)) {
-                                const scan = {
-                                    barcode,
-                                    timestamp: new Date().toLocaleString()
-                                };
-                                
-                                scans.unshift(scan);
-                                updateHistory();
-                                showStatus(`Scanned: ${barcode}`);
-                                if (navigator.vibrate) navigator.vibrate(200);
-                            } else {
-                                showStatus('Duplicate barcode', true);
-                            }
-                        } else {
-                            showStatus('No barcode found', true);
-                        }
-                    } catch (error) {
-                        showStatus('Error processing image: ' + error.message, true);
-                    }
+            // Process each file
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                // Show preview of the last image
+                if (i === files.length - 1) {
+                    const preview = document.getElementById('preview');
+                    preview.style.display = 'block';
+                    preview.src = URL.createObjectURL(file);
                 }
-            } finally {
-                disableButtons(false);
+                try {
+                    // Scan the image
+                    const results = await reader.decode(file);
+
+                    const resultDiv = document.getElementById('result');
+                    if (results.length > 0) {
+                        const barcode = results[0].barcodeText;
+                        if (!scannedBarcodes.includes(barcode)) {
+                            scannedBarcodes.push(barcode);
+                        }
+
+                        resultDiv.style.display = 'block';
+                        resultDiv.textContent = `Detected ${scannedBarcodes.length} unique barcodes`;
+                        // Create new scan item
+                        const scanItem = {
+                            sku: barcode,
+                            imageUrl: URL.createObjectURL(file),
+                            timestamp: new Date().toLocaleTimeString(),
+                            date: new Date().toLocaleDateString()
+                        };
+
+                        // Update scanned list
+                        updateScannedList();
+                        scannedItems.unshift(scanItem); // Add to beginning of array
+
+                        // Show scan controls
+                        document.querySelector('.scan-controls').style.display = 'block';
+                        document.querySelector('.button-container').style.display = 'flex';
+                        // Update UI
+                        updateScanHistory();
+                        showSuccessMessage(`Scanned SKU: ${barcode}`);
+
+                        // Vibrate if supported
+                        if (navigator.vibrate) {
+                            navigator.vibrate(200);
+                        }
+                    } else {
+                        resultDiv.style.display = 'block';
+                        resultDiv.textContent = 'No barcode found in image';
+                        showErrorMessage('No barcode found in image');
+                    }
+                } catch (ex) {
+                    console.error(ex);
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.style.display = 'block';
+                    resultDiv.textContent = 'Error scanning barcode: ' + (ex.message || ex);
+                    showErrorMessage('Error scanning barcode: ' + (ex.message || ex));
+                }
             }
+            // Clear file input
+            event.target.value = '';
         }
 
-        function updateHistory() {
-            const history = document.getElementById('scanHistory');
-            if (scans.length === 0) {
-                history.innerHTML = '';
-                return;
+        function updateScannedList() {
+            const listDiv = document.getElementById('scannedList');
+            if (scannedBarcodes.length > 0) {
+                listDiv.style.display = 'block';
+                listDiv.innerHTML = '<h3>Scanned Items:</h3>' + 
+                    scannedBarcodes.map((code, index) => 
+                        `${index + 1}. ${code}`
+                    ).join('<br>');
             }
-
-            history.innerHTML = scans.map(scan => `
-                <div class="scan-item">
-                    <div><strong>Barcode:</strong> ${scan.barcode}</div>
-                    <div><small>${scan.timestamp}</small></div>
-                </div>
-            `).join('');
+        function showSuccessMessage(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = '#e6ffe6';
+            resultDiv.textContent = message;
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 3000);
         }
 
-        // Initialize on page load
-        window.onload = initBarcodeReader;
+        function scanAnother() {
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('preview').style.display = 'none';
+            document.querySelector('.scan-controls').style.display = 'none';
+            document.querySelector('.button-container').style.display = 'flex';
+        function showErrorMessage(message) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.style.display = 'block';
+            resultDiv.style.background = '#ffe6e6';
+            resultDiv.textContent = message;
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function finishScanning() {
+            document.querySelector('.scan-controls').style.display = 'none';
+            document.querySelector('.button-container').style.display = 'none';
+            document.getElementById('openSZButton').style.display = 'block';
+        }
+        function updateScanHistory() {
+            const historyDiv = document.getElementById('scanHistory');
+            
+            // Add total count if there are items
+            if (scannedItems.length > 0) {
+                historyDiv.innerHTML = `
+                    <div class="total-count">
+                        Total Scanned: ${scannedItems.length} SKU${scannedItems.length > 1 ? 's' : ''}
+                    </div>
+                `;
+            }
+
+        function openInSZWholesale() {
+            window.location.href = 'https://szwholesale.net';
+            // Add each scanned item
+            scannedItems.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'scan-item';
+                itemDiv.innerHTML = `
+                    <img src="${item.imageUrl}" class="scan-image" alt="Scanned item">
+                    <div class="scan-details">
+                        <div class="sku">${item.sku}</div>
+                        <div class="timestamp">${item.date} ${item.timestamp}</div>
+                    </div>
+                `;
+                historyDiv.appendChild(itemDiv);
+            });
+        }
     </script>
 </body>
 </html>
