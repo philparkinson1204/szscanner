@@ -3,25 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Barcode Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode"></script>
+    <title>Product Scanner</title>
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode@9.6.30/dist/dbr.js"></script>
     <style>
+        /* Keeping the same styles for brevity */
         body {
             margin: 0;
             padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: -apple-system, system-ui, sans-serif;
             background: #f5f5f7;
             max-width: 800px;
             margin: 0 auto;
         }
-        .header {
+        .status-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 10px;
+            background: #FF3B30;
+            color: white;
             text-align: center;
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            color: #1a1a1a;
-            font-size: 28px;
-            margin-bottom: 10px;
+            z-index: 1000;
+            display: none;
         }
         .button-container {
             display: flex;
@@ -36,126 +40,72 @@
             border: none;
             border-radius: 12px;
             font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.1s;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        button:active {
-            transform: scale(0.98);
-        }
-        #result {
-            margin: 20px 0;
-            padding: 16px;
-            border-radius: 12px;
-            display: none;
-            animation: fadeIn 0.3s;
-        }
-        .success { 
-            background: #e6ffe6;
-            border-left: 4px solid #34C759;
-        }
-        .error { 
-            background: #ffe6e6;
-            border-left: 4px solid #FF3B30;
-        }
-        .scan-history {
-            margin-top: 30px;
         }
         .scan-item {
             background: white;
             padding: 20px;
-            margin-bottom: 15px;
-            border-radius: 16px;
-            display: flex;
-            gap: 20px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            animation: slideIn 0.3s;
-        }
-        .product-image {
-            width: 120px;
-            height: 120px;
-            object-fit: contain;
+            margin: 10px 0;
             border-radius: 12px;
-            background: #f5f5f7;
-        }
-        .scan-details {
-            flex: 1;
-        }
-        .product-name {
-            font-size: 20px;
-            font-weight: 600;
-            color: #1a1a1a;
-            margin-bottom: 8px;
-        }
-        .barcode {
-            font-family: monospace;
-            color: #666;
-            background: #f5f5f7;
-            padding: 4px 8px;
-            border-radius: 6px;
-            display: inline-block;
-            margin-bottom: 8px;
-        }
-        .timestamp {
-            color: #888;
-            font-size: 14px;
-        }
-        .total-count {
-            background: linear-gradient(135deg, #007AFF, #5856D6);
-            color: white;
-            padding: 16px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            font-weight: 600;
-            text-align: center;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        @keyframes slideIn {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #666;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Product Scanner</h1>
-    </div>
+    <div id="statusBanner" class="status-banner"></div>
+    <h1>Product Scanner</h1>
     
     <div class="button-container">
-        <button onclick="initializeScanner('upload')">Upload Image</button>
-        <button onclick="initializeScanner('camera')">Take Picture</button>
+        <button onclick="initializeScanner('upload')" id="uploadBtn">Upload Image</button>
+        <button onclick="initializeScanner('camera')" id="cameraBtn">Take Picture</button>
     </div>
 
-    <div id="result"></div>
     <div id="scanHistory"></div>
 
     <script>
         let reader = null;
         let scans = [];
-        const license = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
+        let isInitializing = false;
+        const LICENSE_KEY = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
+
+        function showStatus(message, isError = false) {
+            const banner = document.getElementById('statusBanner');
+            banner.style.background = isError ? '#FF3B30' : '#34C759';
+            banner.textContent = message;
+            banner.style.display = 'block';
+            setTimeout(() => banner.style.display = 'none', 3000);
+        }
 
         async function initBarcodeReader() {
+            if (isInitializing) return false;
+            if (reader) return true;
+
+            isInitializing = true;
             try {
-                Dynamsoft.DBR.BarcodeReader.license = license;
+                Dynamsoft.DBR.BarcodeReader.license = LICENSE_KEY;
                 reader = await Dynamsoft.DBR.BarcodeReader.createInstance();
                 return true;
             } catch (error) {
-                showMessage('Error initializing scanner: ' + error.message, 'error');
+                console.error('Scanner initialization error:', error);
+                showStatus('Scanner error: ' + error.message, true);
                 return false;
+            } finally {
+                isInitializing = false;
             }
         }
 
-        function initializeScanner(mode) {
+        function disableButtons(disable) {
+            document.getElementById('uploadBtn').disabled = disable;
+            document.getElementById('cameraBtn').disabled = disable;
+        }
+
+        async function initializeScanner(mode) {
+            disableButtons(true);
+            
+            if (!await initBarcodeReader()) {
+                disableButtons(false);
+                return;
+            }
+
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
@@ -163,71 +113,47 @@
             input.multiple = true;
             input.onchange = handleFiles;
             input.click();
-        }
-
-        async function fetchProductInfo(barcode) {
-            try {
-                // Simulating API call with fake data
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                return {
-                    name: `Product ${barcode}`,
-                    image: `/api/placeholder/400/400`,
-                    description: 'Product description would go here'
-                };
-            } catch (error) {
-                console.error('Error fetching product info:', error);
-                return null;
-            }
+            
+            disableButtons(false);
         }
 
         async function handleFiles(event) {
             const files = event.target.files;
             if (!files.length) return;
 
-            if (!reader && !await initBarcodeReader()) return;
+            disableButtons(true);
+            showStatus('Processing...');
 
-            for (const file of files) {
-                try {
-                    showMessage('Processing image...', 'loading');
-                    const results = await reader.decode(file);
-                    
-                    if (results.length > 0) {
-                        const barcode = results[0].barcodeText;
+            try {
+                for (const file of files) {
+                    try {
+                        const results = await reader.decode(file);
                         
-                        if (!scans.find(scan => scan.barcode === barcode)) {
-                            showMessage('Looking up product information...', 'loading');
-                            const productInfo = await fetchProductInfo(barcode);
+                        if (results.length > 0) {
+                            const barcode = results[0].barcodeText;
                             
-                            const scan = {
-                                barcode,
-                                productName: productInfo?.name || 'Unknown Product',
-                                productImage: productInfo?.image || '/api/placeholder/400/400',
-                                timestamp: new Date().toLocaleString()
-                            };
-                            
-                            scans.unshift(scan);
-                            updateHistory();
-                            showMessage(`Scanned: ${scan.productName}`, 'success');
-                            if (navigator.vibrate) navigator.vibrate(200);
+                            if (!scans.find(scan => scan.barcode === barcode)) {
+                                const scan = {
+                                    barcode,
+                                    timestamp: new Date().toLocaleString()
+                                };
+                                
+                                scans.unshift(scan);
+                                updateHistory();
+                                showStatus(`Scanned: ${barcode}`);
+                                if (navigator.vibrate) navigator.vibrate(200);
+                            } else {
+                                showStatus('Duplicate barcode', true);
+                            }
                         } else {
-                            showMessage('Duplicate barcode', 'error');
+                            showStatus('No barcode found', true);
                         }
-                    } else {
-                        showMessage('No barcode found', 'error');
+                    } catch (error) {
+                        showStatus('Error processing image: ' + error.message, true);
                     }
-                } catch (error) {
-                    showMessage('Scan error: ' + error.message, 'error');
                 }
-            }
-        }
-
-        function showMessage(text, type) {
-            const result = document.getElementById('result');
-            result.textContent = text;
-            result.className = type;
-            result.style.display = 'block';
-            if (type !== 'loading') {
-                setTimeout(() => result.style.display = 'none', 3000);
+            } finally {
+                disableButtons(false);
             }
         }
 
@@ -238,24 +164,16 @@
                 return;
             }
 
-            let html = `
-                <div class="total-count">
-                    ${scans.length} Product${scans.length > 1 ? 's' : ''} Scanned
-                </div>`;
-
-            html += scans.map(scan => `
+            history.innerHTML = scans.map(scan => `
                 <div class="scan-item">
-                    <img src="${scan.productImage}" class="product-image" alt="Product">
-                    <div class="scan-details">
-                        <div class="product-name">${scan.productName}</div>
-                        <div class="barcode">${scan.barcode}</div>
-                        <div class="timestamp">${scan.timestamp}</div>
-                    </div>
+                    <div><strong>Barcode:</strong> ${scan.barcode}</div>
+                    <div><small>${scan.timestamp}</small></div>
                 </div>
             `).join('');
-
-            history.innerHTML = html;
         }
+
+        // Initialize on page load
+        window.onload = initBarcodeReader;
     </script>
 </body>
 </html>
