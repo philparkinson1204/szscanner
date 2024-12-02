@@ -146,8 +146,12 @@
     <div class="scan-history" id="scanHistory"></div>
 
     <script>
-        // Initialize with new license key from the email
+        // Updated license key from your email
         Dynamsoft.DBR.BarcodeReader.license = 'DLS2eyJoYW5kc2hha2VDb2RlIjoiMjAwMDAxLTE2NDk4Mjk3OTI2MzUiLCJvcmdhbml6YXRpb25JRCI6IjIwMDAwMSIsInNlc3Npb25QYXNzd29yZCI6IndTcGR6Vm05WDJrcEQ5YUoifQ==';
+        
+        // Add initialization for SDK
+        Dynamsoft.DBR.BarcodeReader.loadWasm();
+
         let reader = null;
         let scannedBarcodes = [];
         let scannedItems = [];
