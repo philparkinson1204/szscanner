@@ -3,94 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enhanced Barcode Scanner</title>
+    <title>Product Barcode Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/dynamsoft-javascript-barcode"></script>
     <style>
         body {
             margin: 0;
             padding: 20px;
             font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
             background: #f5f5f7;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #1a1a1a;
+            font-size: 28px;
+            margin-bottom: 10px;
         }
         .button-container {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             margin: 20px 0;
         }
         button {
             flex: 1;
-            padding: 15px;
+            padding: 16px;
             background: #007AFF;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 16px;
+            font-weight: 600;
             cursor: pointer;
+            transition: transform 0.1s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        button:active {
+            transform: scale(0.98);
         }
         #result {
             margin: 20px 0;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 16px;
+            border-radius: 12px;
             display: none;
+            animation: fadeIn 0.3s;
         }
-        .success { background: #e6ffe6; }
-        .error { background: #ffe6e6; }
-        #preview {
-            width: 100%;
-            border-radius: 8px;
-            display: none;
-            margin-top: 20px;
+        .success { 
+            background: #e6ffe6;
+            border-left: 4px solid #34C759;
+        }
+        .error { 
+            background: #ffe6e6;
+            border-left: 4px solid #FF3B30;
         }
         .scan-history {
-            margin-top: 20px;
+            margin-top: 30px;
         }
         .scan-item {
             background: white;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 16px;
             display: flex;
-            align-items: center;
-            gap: 15px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            gap: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            animation: slideIn 0.3s;
         }
-        .scan-image {
-            width: 80px;
-            height: 80px;
-            object-fit: cover;
-            border-radius: 8px;
+        .product-image {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            border-radius: 12px;
+            background: #f5f5f7;
         }
         .scan-details {
             flex: 1;
         }
-        .sku {
-            font-size: 18px;
+        .product-name {
+            font-size: 20px;
             font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+        .barcode {
+            font-family: monospace;
+            color: #666;
+            background: #f5f5f7;
+            padding: 4px 8px;
+            border-radius: 6px;
+            display: inline-block;
+            margin-bottom: 8px;
         }
         .timestamp {
-            color: #666;
+            color: #888;
             font-size: 14px;
         }
         .total-count {
-            background: #007AFF;
+            background: linear-gradient(135deg, #007AFF, #5856D6);
             color: white;
-            padding: 10px;
-            border-radius: 8px;
+            padding: 16px;
+            border-radius: 12px;
             margin-bottom: 20px;
+            font-weight: 600;
+            text-align: center;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <h1>Barcode Scanner</h1>
+    <div class="header">
+        <h1>Product Scanner</h1>
+    </div>
     
     <div class="button-container">
         <button onclick="initializeScanner('upload')">Upload Image</button>
         <button onclick="initializeScanner('camera')">Take Picture</button>
     </div>
 
-    <img id="preview" alt="Preview">
     <div id="result"></div>
     <div id="scanHistory"></div>
 
@@ -120,6 +165,21 @@
             input.click();
         }
 
+        async function fetchProductInfo(barcode) {
+            try {
+                // Simulating API call with fake data
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return {
+                    name: `Product ${barcode}`,
+                    image: `/api/placeholder/400/400`,
+                    description: 'Product description would go here'
+                };
+            } catch (error) {
+                console.error('Error fetching product info:', error);
+                return null;
+            }
+        }
+
         async function handleFiles(event) {
             const files = event.target.files;
             if (!files.length) return;
@@ -128,25 +188,26 @@
 
             for (const file of files) {
                 try {
-                    const imageUrl = URL.createObjectURL(file);
-                    document.getElementById('preview').src = imageUrl;
-                    document.getElementById('preview').style.display = 'block';
-
+                    showMessage('Processing image...', 'loading');
                     const results = await reader.decode(file);
                     
                     if (results.length > 0) {
                         const barcode = results[0].barcodeText;
                         
-                        // Check for duplicates
-                        if (!scans.find(scan => scan.sku === barcode)) {
+                        if (!scans.find(scan => scan.barcode === barcode)) {
+                            showMessage('Looking up product information...', 'loading');
+                            const productInfo = await fetchProductInfo(barcode);
+                            
                             const scan = {
-                                sku: barcode,
-                                imageUrl,
+                                barcode,
+                                productName: productInfo?.name || 'Unknown Product',
+                                productImage: productInfo?.image || '/api/placeholder/400/400',
                                 timestamp: new Date().toLocaleString()
                             };
+                            
                             scans.unshift(scan);
                             updateHistory();
-                            showMessage(`Scanned: ${barcode}`, 'success');
+                            showMessage(`Scanned: ${scan.productName}`, 'success');
                             if (navigator.vibrate) navigator.vibrate(200);
                         } else {
                             showMessage('Duplicate barcode', 'error');
@@ -165,7 +226,9 @@
             result.textContent = text;
             result.className = type;
             result.style.display = 'block';
-            setTimeout(() => result.style.display = 'none', 3000);
+            if (type !== 'loading') {
+                setTimeout(() => result.style.display = 'none', 3000);
+            }
         }
 
         function updateHistory() {
@@ -177,14 +240,15 @@
 
             let html = `
                 <div class="total-count">
-                    Total Scanned: ${scans.length} SKU${scans.length > 1 ? 's' : ''}
+                    ${scans.length} Product${scans.length > 1 ? 's' : ''} Scanned
                 </div>`;
 
             html += scans.map(scan => `
                 <div class="scan-item">
-                    <img src="${scan.imageUrl}" class="scan-image" alt="Scanned item">
+                    <img src="${scan.productImage}" class="product-image" alt="Product">
                     <div class="scan-details">
-                        <div class="sku">${scan.sku}</div>
+                        <div class="product-name">${scan.productName}</div>
+                        <div class="barcode">${scan.barcode}</div>
                         <div class="timestamp">${scan.timestamp}</div>
                     </div>
                 </div>
