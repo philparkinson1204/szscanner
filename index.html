@@ -96,6 +96,11 @@
             padding: 20px;
             color: #4b5563;
         }
+        #interactive.viewport img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
     </style>
 </head>
 <body>
@@ -241,7 +246,21 @@
             img.onload = function() {
                 const viewport = document.getElementById('interactive');
                 viewport.innerHTML = '';
-                viewport.appendChild(img);
+                
+                const container = document.createElement('div');
+                container.style.width = '100%';
+                container.style.height = '100%';
+                container.style.display = 'flex';
+                container.style.justifyContent = 'center';
+                container.style.alignItems = 'center';
+                
+                img.style.maxWidth = '100%';
+                img.style.maxHeight = '100%';
+                img.style.objectFit = 'contain';
+                
+                container.appendChild(img);
+                viewport.appendChild(container);
+                
                 showLoading(true);
 
                 Quagga.decodeSingle({
