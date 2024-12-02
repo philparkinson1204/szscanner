@@ -2,115 +2,25 @@
 <html>
 <head>
     <title>Barcode Scanner</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
     <style>
-        body { 
-            font-family: system-ui, sans-serif; 
-            max-width: 800px; 
-            margin: 0 auto; 
-            padding: 20px;
-            line-height: 1.5;
-        }
-        .button-container { 
-            display: flex; 
-            gap: 10px; 
-            margin: 20px 0; 
-        }
-        button { 
-            flex: 1; 
-            padding: 12px;
-            font-size: 16px;
-            background: #2563eb; 
-            color: white; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        button:hover { 
-            background: #1d4ed8; 
-        }
-        button:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
-        }
-        #interactive.viewport { 
-            position: relative; 
-            width: 100%; 
-            height: 400px;
-            margin: 20px 0;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        canvas.drawingBuffer, video.drawingBuffer { 
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .scan-history { 
-            margin-top: 20px; 
-            border: 1px solid #e5e7eb; 
-            border-radius: 8px; 
-            padding: 20px;
-            background: #f8fafc;
-        }
-        .scan-item { 
-            padding: 12px;
-            margin: 8px 0;
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-        }
-        .scan-code { 
-            font-weight: 600;
-            color: #1e293b;
-        }
-        .scan-time { 
-            font-size: 14px;
-            color: #64748b;
-            margin-top: 4px;
-        }
-        #result { 
-            margin: 20px 0;
-            padding: 16px;
-            background: #f0f9ff;
-            border-radius: 6px;
-            border: 1px solid #bae6fd;
-            color: #0369a1;
-            font-weight: 500;
-            display: none;
-        }
-        .error { 
-            color: #dc2626;
-            padding: 16px;
-            margin: 16px 0;
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: 6px;
-            display: none;
-        }
-        #loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-            color: #4b5563;
-        }
-        #interactive.viewport img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
+        body { max-width: 800px; margin: 20px auto; padding: 20px; font-family: sans-serif; }
+        .button-container { margin: 20px 0; }
+        button { background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 4px; margin: 10px; }
+        #interactive { width: 100%; height: 300px; }
+        .error { color: red; margin: 10px 0; }
+        #loading { display: none; }
+        .scan-history { margin-top: 20px; border: 1px solid #ddd; padding: 10px; }
     </style>
 </head>
 <body>
     <h1>Barcode Scanner</h1>
     
     <div class="button-container">
-        <input type="file" id="fileInput" accept="image/*" style="display: none">
-        <button id="uploadBtn" onclick="document.getElementById('fileInput').click()">Upload Image</button>
-        <button id="cameraBtn" onclick="startCamera()">Take Picture</button>
-        <button id="stopBtn" onclick="stopScanning()" style="display: none">Stop Scanning</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none">
+        <button onclick="document.getElementById('fileInput').click()">Upload Image</button>
+        <button onclick="startScanner()">Take Picture</button>
+        <button onclick="stopScanner()">Stop Scanning</button>
     </div>
 
     <div id="error" class="error"></div>
@@ -123,178 +33,58 @@
     </div>
 
     <script>
-    const MAX_HISTORY = 50;
-    let isScanning = false;
-    let scans = JSON.parse(localStorage.getItem('barcodeScans') || '[]');
+    let codeReader = new ZXing.BrowserMultiFormatReader();
+    let scans = [];
 
-    function showError(message, duration = 3000) {
-        const error = document.getElementById('error');
-        error.textContent = message;
-        error.style.display = 'block';
-        setTimeout(() => error.style.display = 'none', duration);
+    function startScanner() {
+        codeReader.decodeFromVideoDevice(null, 'interactive', (result, err) => {
+            if (result) {
+                addScan(result.text);
+                stopScanner();
+            }
+        });
     }
 
-    function showLoading(show) {
-        document.getElementById('loading').style.display = show ? 'block' : 'none';
+    function stopScanner() {
+        codeReader.reset();
+        document.getElementById('interactive').innerHTML = '';
     }
 
-    function showResult(code) {
-        const result = document.getElementById('result');
-        result.textContent = `Detected barcode: ${code}`;
-        result.style.display = 'block';
-        setTimeout(() => result.style.display = 'none', 5000);
+    function addScan(code) {
+        scans.unshift({ code: code, time: new Date().toLocaleString() });
+        updateHistory();
+        document.getElementById('result').textContent = code;
     }
 
-    function addToHistory(code) {
-        const scan = {
-            code,
-            timestamp: new Date().toISOString()
-        };
-        scans.unshift(scan);
-        if (scans.length > MAX_HISTORY) {
-            scans.pop();
-        }
-        localStorage.setItem('barcodeScans', JSON.stringify(scans));
-        updateHistoryDisplay();
-    }
-
-    function updateHistoryDisplay() {
-        const historyList = document.getElementById('historyList');
-        if (scans.length === 0) {
-            historyList.innerHTML = '<p style="color: #64748b;">No scans yet</p>';
-            return;
-        }
-        
-        historyList.innerHTML = scans.map(scan => `
-            <div class="scan-item">
+    function updateHistory() {
+        let html = scans.map(scan => 
+            `<div class="scan-item">
                 <div class="scan-code">${scan.code}</div>
-                <div class="scan-time">${new Date(scan.timestamp).toLocaleString()}</div>
-            </div>
-        `).join('');
+                <div class="scan-time">${scan.time}</div>
+            </div>`
+        ).join('');
+        document.getElementById('historyList').innerHTML = html || 'No scans yet';
     }
 
-    function toggleControls(scanning) {
-        document.getElementById('uploadBtn').disabled = scanning;
-        document.getElementById('cameraBtn').style.display = scanning ? 'none' : 'block';
-        document.getElementById('stopBtn').style.display = scanning ? 'block' : 'none';
-    }
-
-    function stopScanning() {
-        if (isScanning) {
-            Quagga.stop();
-            isScanning = false;
-            toggleControls(false);
-        }
-    }
-
-    function startCamera() {
-        const viewport = document.getElementById('interactive');
-        viewport.innerHTML = '';
-        showLoading(true);
-
-        Quagga.init({
-            inputStream: {
-                name: "Live",
-                type: "LiveStream",
-                target: viewport,
-                constraints: {
-                    facingMode: "environment",
-                    width: 1280,
-                    height: 720
-                }
-            },
-            decoder: {
-                readers: [
-                    "ean_reader",
-                    "ean_8_reader",
-                    "code_128_reader",
-                    "code_39_reader",
-                    "upc_reader",
-                    "upc_e_reader"
-                ],
-                multiple: false
-            },
-            locate: true
-        }, function(err) {
-            showLoading(false);
-            if (err) {
-                showError('Failed to start camera: ' + err);
-                return;
-            }
-            Quagga.start();
-            isScanning = true;
-            toggleControls(true);
-        });
-
-        Quagga.onDetected(function(result) {
-            if (result.codeResult) {
-                showResult(result.codeResult.code);
-                addToHistory(result.codeResult.code);
-                stopScanning();
-            }
-        });
-    }
-
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.src = e.target.result;
-            img.onload = function() {
-                const viewport = document.getElementById('interactive');
-                viewport.innerHTML = '';
-                
-                const container = document.createElement('div');
-                container.style.width = '100%';
-                container.style.height = '100%';
-                container.style.display = 'flex';
-                container.style.justifyContent = 'center';
-                container.style.alignItems = 'center';
-                
-                img.style.maxWidth = '100%';
-                img.style.maxHeight = '100%';
-                img.style.objectFit = 'contain';
-                
-                container.appendChild(img);
-                viewport.appendChild(container);
-                
-                showLoading(true);
-
-                Quagga.decodeSingle({
-                    decoder: {
-                        readers: [
-                            "ean_reader",
-                            "ean_8_reader",
-                            "code_128_reader",
-                            "code_39_reader",
-                            "upc_reader",
-                            "upc_e_reader"
-                        ]
-                    },
-                    locate: true,
-                    src: img.src
-                }, function(result) {
-                    showLoading(false);
-                    if (result && result.codeResult) {
-                        showResult(result.codeResult.code);
-                        addToHistory(result.codeResult.code);
-                    } else {
-                        showError('No barcode detected');
-                    }
-                });
+    document.getElementById('fileInput').onchange = function(e) {
+        let file = e.target.files[0];
+        if (file) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                codeReader.decodeFromImage(undefined, e.target.result)
+                    .then(result => {
+                        if (result) addScan(result.text);
+                    })
+                    .catch(() => {
+                        document.getElementById('error').textContent = 'No barcode detected';
+                        setTimeout(() => document.getElementById('error').textContent = '', 3000);
+                    });
             };
-        };
-        reader.readAsDataURL(file);
-    });
+            reader.readAsDataURL(file);
+        }
+    };
 
-    // Initialize history display
-    updateHistoryDisplay();
-
-    // Clean up on page unload
-    window.addEventListener('unload', stopScanning);
+    updateHistory();
     </script>
 </body>
 </html>
